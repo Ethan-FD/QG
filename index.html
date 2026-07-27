@@ -6,6 +6,7 @@
 <title>QG</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@500;600;700&family=Inter:wght@400;500;600&family=JetBrains+Mono:wght@500;600&display=swap" rel="stylesheet">
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 <style>
   :root{
     --bg:#0F1119;
@@ -222,12 +223,50 @@
   const TIMED_OUT = Symbol('timeout');
   const hasClaudeStorage = ()=> typeof window.storage !== 'undefined' && typeof window.storage.get === 'function';
 
+  // --- Supabase (used only when running outside Claude, e.g. hosted on GitHub Pages) ---
+  const SUPABASE_URL = 'https://xszgbiafadaveeafbgln.supabase.co';
+  const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InhzemdiaWFmYWRhdmVlYWZiZ2xuIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODE0NDk0MzQsImV4cCI6MjA5NzAyNTQzNH0.qCPoVelWTObSDf4j58-zC8TwddFTLHSlYRD5p7unaTo';
+  let supabaseClient = null;
+  if(!hasClaudeStorage() && window.supabase && SUPABASE_URL.startsWith('https://')){
+    try{ supabaseClient = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY); }
+    catch(e){ console.error('supabase init failed', e); }
+  }
+
+  function getSpaceCode(){
+    let code = localStorage.getItem('qg-space-code');
+    if(!code){
+      code = prompt("Crée un code personnel pour synchroniser tes données entre appareils (note-le bien, tu devras ressaisir exactement le même sur ton autre appareil) :", '');
+      if(!code || !code.trim()) code = 'qg-' + Math.random().toString(36).slice(2,10);
+      localStorage.setItem('qg-space-code', code.trim());
+    }
+    return localStorage.getItem('qg-space-code');
+  }
+  const SPACE_CODE = (!hasClaudeStorage() && supabaseClient) ? getSpaceCode() : null;
+
+  async function supaGetValue(nsKey){
+    const { data, error } = await supabaseClient.from('kv_store').select('value').eq('key', nsKey).maybeSingle();
+    if(error || !data) return TIMED_OUT;
+    return data.value;
+  }
+  async function supaSetValue(nsKey, value){
+    await supabaseClient.from('kv_store').upsert({ key: nsKey, value, updated_at: new Date().toISOString() });
+  }
+
   async function loadKey(key, fallback, timeoutMs){
     try{
       if(hasClaudeStorage()){
         const r = await withTimeout(window.storage.get(key, false), timeoutMs || 2500, TIMED_OUT);
         if(r === TIMED_OUT) return fallback;
         return r ? JSON.parse(r.value) : fallback;
+      } else if(supabaseClient){
+        const nsKey = SPACE_CODE + '::' + key;
+        const val = await withTimeout(supaGetValue(nsKey), timeoutMs || 4000, TIMED_OUT);
+        if(val === TIMED_OUT || val === null || val === undefined){
+          const raw = localStorage.getItem(key);
+          return raw ? JSON.parse(raw) : fallback;
+        }
+        localStorage.setItem(key, JSON.stringify(val));
+        return val;
       } else {
         const raw = localStorage.getItem(key);
         return raw ? JSON.parse(raw) : fallback;
@@ -238,6 +277,10 @@
     try{
       if(hasClaudeStorage()){
         await withTimeout(window.storage.set(key, JSON.stringify(value), false), 4000, null);
+      } else if(supabaseClient){
+        localStorage.setItem(key, JSON.stringify(value));
+        const nsKey = SPACE_CODE + '::' + key;
+        await withTimeout(supaSetValue(nsKey, value), 6000, null);
       } else {
         localStorage.setItem(key, JSON.stringify(value));
       }
@@ -724,6 +767,7 @@
       </div>
       ${state.view==='habits' ? renderHabits() : state.view==='brain' ? renderBrain() : renderPlanning()}
       ${!state.synced ? '<div class="sync-note">Synchronisation en cours…</div>' : ''}
+      ${supabaseClient ? `<div class="sync-note">☁️ Cloud actif — code : <b style="color:var(--text-dim)">${esc(SPACE_CODE)}</b> <span data-action="change-code" style="text-decoration:underline;cursor:pointer;">(changer)</span></div>` : ''}
     `;
     const focusEl = document.querySelector('.rename-in, .inline-form input');
     if(focusEl){ focusEl.focus(); if(focusEl.value) focusEl.setSelectionRange(focusEl.value.length, focusEl.value.length); }
@@ -804,6 +848,12 @@
       case 'delete-event':
         if(state.confirmDelete === 'event:'+id) deleteEvent(id);
         else { state.confirmDelete = 'event:'+id; render(); }
+        break;
+      case 'change-code':
+        if(confirm("Changer de code va recharger la page et te redemander un nouveau code. Continuer ?")){
+          localStorage.removeItem('qg-space-code');
+          location.reload();
+        }
         break;
     }
   });
