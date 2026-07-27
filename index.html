@@ -1,0 +1,896 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>QG</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@500;600;700&family=Inter:wght@400;500;600&family=JetBrains+Mono:wght@500;600&display=swap" rel="stylesheet">
+<style>
+  :root{
+    --bg:#0F1119;
+    --bg-elevated:#161927;
+    --surface:#1D2131;
+    --surface-hover:#262B40;
+    --border:#2B3046;
+    --text:#ECEEF5;
+    --text-dim:#8B8FA8;
+    --text-faint:#565C77;
+    --gold:#E8B454;
+    --gold-dim:rgba(232,180,84,0.14);
+    --teal:#52D6C6;
+    --teal-dim:rgba(82,214,198,0.14);
+    --danger:#E2604F;
+    --danger-dim:rgba(226,96,79,0.14);
+    --violet:#9088E8;
+    --violet-dim:rgba(144,136,232,0.16);
+    --now:#FF6B5C;
+  }
+  *{box-sizing:border-box;}
+  html,body{margin:0;padding:0;}
+  body{
+    background:var(--bg);
+    color:var(--text);
+    font-family:'Inter',sans-serif;
+    min-height:100vh;
+    -webkit-font-smoothing:antialiased;
+  }
+  #app{max-width:640px;margin:0 auto;padding:20px 16px 80px;min-height:100vh;}
+
+  h1,h2,h3{font-family:'Space Grotesk',sans-serif;margin:0;}
+
+  /* Header */
+  .header{display:flex;align-items:baseline;justify-content:space-between;margin-bottom:20px;}
+  .header .brand{font-size:22px;font-weight:700;letter-spacing:0.02em;}
+  .header .brand span{color:var(--gold);}
+  .header .date{font-family:'JetBrains Mono',monospace;font-size:11px;color:var(--text-faint);text-transform:capitalize;}
+
+  /* Nav switch */
+  .nav-switch{display:flex;background:var(--bg-elevated);border:1px solid var(--border);border-radius:12px;padding:4px;margin-bottom:22px;gap:4px;}
+  .nav-switch button{flex:1;border:none;background:transparent;color:var(--text-dim);font-family:'Space Grotesk',sans-serif;font-weight:600;font-size:13px;padding:9px 0;border-radius:9px;cursor:pointer;transition:all .18s ease;}
+  .nav-switch button.active{background:var(--surface);color:var(--text);box-shadow:0 1px 0 rgba(255,255,255,0.03) inset;}
+  .nav-switch button:not(.active):hover{color:var(--text);}
+  .nav-switch button.active.tab-habits{background:var(--gold-dim);color:var(--gold);}
+  .nav-switch button.active.tab-brain{background:var(--teal-dim);color:var(--teal);}
+  .nav-switch button.active.tab-planning{background:var(--violet-dim);color:var(--violet);}
+
+  /* HUD */
+  .hud{background:linear-gradient(145deg,var(--bg-elevated),var(--surface));border:1px solid var(--border);border-radius:16px;padding:18px 18px 16px;margin-bottom:20px;position:relative;overflow:hidden;}
+  .hud-top{display:flex;align-items:center;justify-content:space-between;margin-bottom:12px;}
+  .hud-rank{display:flex;align-items:center;gap:10px;}
+  .rank-badge{width:38px;height:38px;border-radius:10px;background:var(--gold-dim);border:1px solid rgba(232,180,84,0.35);display:flex;align-items:center;justify-content:center;font-family:'JetBrains Mono',monospace;font-weight:600;color:var(--gold);font-size:14px;flex-shrink:0;}
+  .rank-name{font-family:'Space Grotesk',sans-serif;font-weight:700;font-size:15px;}
+  .rank-sub{font-family:'JetBrains Mono',monospace;font-size:10.5px;color:var(--text-faint);margin-top:1px;}
+  .hud-streak{display:flex;align-items:center;gap:5px;font-family:'JetBrains Mono',monospace;font-size:13px;color:var(--text-dim);}
+  .hud-streak b{color:var(--text);font-weight:600;}
+  .xp-track{height:7px;border-radius:5px;background:var(--bg);overflow:hidden;position:relative;border:1px solid var(--border);}
+  .xp-fill{height:100%;background:linear-gradient(90deg,var(--gold),#F3CE84);border-radius:5px;transition:width .4s cubic-bezier(.4,0,.2,1);}
+  .xp-label{display:flex;justify-content:space-between;margin-top:6px;font-family:'JetBrains Mono',monospace;font-size:10.5px;color:var(--text-faint);}
+
+  /* Habit grid */
+  .section-label{font-family:'JetBrains Mono',monospace;font-size:11px;color:var(--text-faint);text-transform:uppercase;letter-spacing:0.08em;margin:22px 0 10px;}
+  .habit-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(140px,1fr));gap:10px;}
+  .habit-card{background:var(--surface);border:1px solid var(--border);border-radius:14px;padding:14px 12px;position:relative;transition:border-color .15s ease,transform .1s ease;}
+  .habit-card.done{border-color:rgba(232,180,84,0.5);background:linear-gradient(160deg,var(--gold-dim),var(--surface) 60%);}
+  .habit-card:active{transform:scale(0.98);}
+  .habit-emoji{font-size:22px;line-height:1;}
+  .habit-name{font-family:'Space Grotesk',sans-serif;font-weight:600;font-size:13.5px;margin-top:8px;line-height:1.25;}
+  .habit-streak{font-family:'JetBrains Mono',monospace;font-size:11px;color:var(--text-faint);margin-top:5px;display:flex;align-items:center;gap:3px;}
+  .habit-streak.active{color:var(--gold);}
+  .habit-check{position:absolute;top:12px;right:12px;width:24px;height:24px;border-radius:7px;border:1.5px solid var(--border);background:var(--bg);cursor:pointer;display:flex;align-items:center;justify-content:center;color:transparent;font-size:14px;transition:all .15s ease;}
+  .habit-card.done .habit-check{background:var(--gold);border-color:var(--gold);color:var(--bg-elevated);}
+  .habit-tools{display:flex;gap:6px;margin-top:10px;}
+  .icon-btn{border:none;background:transparent;color:var(--text-faint);cursor:pointer;font-size:12px;padding:2px 4px;border-radius:5px;}
+  .icon-btn:hover{color:var(--text-dim);background:var(--surface-hover);}
+  .icon-btn.danger-active{color:var(--danger);background:var(--danger-dim);}
+
+  .add-card{border:1.5px dashed var(--border);background:transparent;border-radius:14px;padding:14px 12px;display:flex;align-items:center;justify-content:center;cursor:pointer;color:var(--text-faint);font-family:'Space Grotesk',sans-serif;font-weight:600;font-size:13px;min-height:90px;transition:border-color .15s ease,color .15s ease;}
+  .add-card:hover{border-color:var(--text-faint);color:var(--text-dim);}
+
+  .inline-form{background:var(--surface);border:1px solid var(--border);border-radius:14px;padding:14px;grid-column:span 2;}
+  .inline-form .row{display:flex;gap:8px;margin-bottom:8px;}
+  .inline-form input{background:var(--bg);border:1px solid var(--border);border-radius:8px;color:var(--text);font-family:'Inter',sans-serif;font-size:13px;padding:8px 10px;outline:none;}
+  .inline-form input:focus{border-color:var(--text-faint);}
+  .inline-form input.emoji-in{width:52px;text-align:center;font-size:16px;padding:8px 6px;}
+  .inline-form input.name-in{flex:1;min-width:0;}
+  .form-actions{display:flex;gap:8px;justify-content:flex-end;}
+  .btn{font-family:'Space Grotesk',sans-serif;font-weight:600;font-size:12.5px;border:none;border-radius:8px;padding:7px 13px;cursor:pointer;}
+  .btn-primary{background:var(--gold);color:#1a1305;}
+  .btn-ghost{background:transparent;color:var(--text-faint);}
+  .btn-ghost:hover{color:var(--text-dim);}
+
+  /* Brain view */
+  .pill-row{display:flex;gap:8px;overflow-x:auto;padding-bottom:4px;margin-bottom:14px;-ms-overflow-style:none;scrollbar-width:none;flex-wrap:wrap;}
+  .pill-row::-webkit-scrollbar{display:none;}
+  .pill{flex-shrink:0;display:flex;align-items:center;gap:6px;background:var(--surface);border:1px solid var(--border);color:var(--text-dim);font-family:'Space Grotesk',sans-serif;font-weight:600;font-size:13px;padding:8px 12px;border-radius:10px;cursor:pointer;white-space:nowrap;transition:all .15s ease;}
+  .pill.active{background:var(--teal-dim);border-color:rgba(82,214,198,0.5);color:var(--teal);}
+  .pill.sub{font-size:12px;padding:6px 11px;}
+  .pill.sub.active{background:var(--gold-dim);border-color:rgba(232,180,84,0.5);color:var(--gold);}
+  .pill .x{opacity:0.5;font-size:11px;margin-left:2px;}
+  .pill.confirming{background:var(--danger-dim);border-color:var(--danger);color:var(--danger);}
+  .pill-add{flex-shrink:0;display:flex;align-items:center;justify-content:center;width:36px;height:36px;border-radius:10px;border:1.5px dashed var(--border);color:var(--text-faint);cursor:pointer;background:transparent;}
+  .pill-add:hover{border-color:var(--text-faint);color:var(--text-dim);}
+
+  .brain-empty{color:var(--text-faint);font-size:13px;text-align:center;padding:40px 20px;font-family:'JetBrains Mono',monospace;}
+
+  .note-wrap{background:var(--surface);border:1px solid var(--border);border-radius:14px;overflow:hidden;}
+  .note-head{display:flex;justify-content:space-between;align-items:center;padding:10px 14px;border-bottom:1px solid var(--border);}
+  .note-title{font-family:'Space Grotesk',sans-serif;font-weight:600;font-size:13.5px;color:var(--text-dim);}
+  .save-indicator{font-family:'JetBrains Mono',monospace;font-size:10.5px;color:var(--teal);opacity:0;transition:opacity .3s ease;}
+  .save-indicator.show{opacity:1;}
+  textarea.note-textarea{width:100%;min-height:280px;background:transparent;border:none;outline:none;color:var(--text);font-family:'Inter',sans-serif;font-size:14.5px;line-height:1.65;padding:16px 14px;resize:vertical;}
+  textarea.note-textarea::placeholder{color:var(--text-faint);}
+
+  .rename-in{background:var(--bg);border:1px solid var(--text-faint);border-radius:8px;color:var(--text);font-family:'Space Grotesk',sans-serif;font-weight:600;font-size:13px;padding:6px 9px;outline:none;width:110px;}
+
+  .sync-note{text-align:center;font-family:'JetBrains Mono',monospace;font-size:10px;color:var(--text-faint);margin-top:18px;opacity:0.7;}
+
+  /* Planning */
+  .week-nav{display:flex;align-items:center;gap:6px;margin-bottom:10px;}
+  .week-nav .arrow{background:var(--surface);border:1px solid var(--border);color:var(--text-dim);width:32px;height:32px;border-radius:9px;cursor:pointer;font-size:14px;flex-shrink:0;}
+  .week-nav .arrow:hover{background:var(--surface-hover);}
+  .week-nav .today-btn{background:transparent;border:1px solid var(--border);color:var(--text-dim);font-family:'JetBrains Mono',monospace;font-size:11px;padding:0 10px;height:32px;border-radius:9px;cursor:pointer;}
+  .week-nav .today-btn:hover{color:var(--text);border-color:var(--text-faint);}
+  .week-strip{display:flex;gap:6px;margin-bottom:16px;}
+  .day-pill{flex:1;display:flex;flex-direction:column;align-items:center;gap:2px;background:var(--surface);border:1px solid var(--border);border-radius:11px;padding:8px 2px;cursor:pointer;transition:all .15s ease;}
+  .day-pill .dow{font-family:'JetBrains Mono',monospace;font-size:9.5px;color:var(--text-faint);text-transform:uppercase;}
+  .day-pill .dnum{font-family:'Space Grotesk',sans-serif;font-weight:700;font-size:15px;}
+  .day-pill.active{background:var(--violet-dim);border-color:rgba(144,136,232,0.55);}
+  .day-pill.active .dow,.day-pill.active .dnum{color:var(--violet);}
+  .day-pill.is-today .dnum::after{content:'';display:block;width:4px;height:4px;border-radius:50%;background:var(--now);margin:2px auto 0;}
+
+  .agenda-wrap{background:var(--surface);border:1px solid var(--border);border-radius:14px;overflow:hidden;}
+  .agenda-scroll{max-height:520px;overflow-y:auto;position:relative;}
+  .agenda-grid{position:relative;padding:6px 10px 6px 54px;background-image:repeating-linear-gradient(to bottom, var(--border) 0, var(--border) 1px, transparent 1px, transparent 50px);background-position:0 3px;}
+  .hour-label{position:absolute;left:0;width:44px;text-align:right;font-family:'JetBrains Mono',monospace;font-size:10px;color:var(--text-faint);transform:translateY(-6px);}
+  .event-block{position:absolute;left:54px;right:10px;background:var(--violet-dim);border-left:3px solid var(--violet);border-radius:7px;padding:5px 8px;cursor:pointer;overflow:hidden;}
+  .event-title{font-family:'Space Grotesk',sans-serif;font-weight:600;font-size:12.5px;color:var(--text);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
+  .event-time{font-family:'JetBrains Mono',monospace;font-size:10px;color:var(--text-dim);}
+  .now-line{position:absolute;left:44px;right:10px;height:0;border-top:2px solid var(--now);z-index:3;}
+  .now-line::before{content:'';position:absolute;left:-4px;top:-4px;width:8px;height:8px;border-radius:50%;background:var(--now);}
+
+  .add-event-bar{display:flex;align-items:center;justify-content:center;gap:6px;padding:11px;border-bottom:1px solid var(--border);color:var(--text-faint);font-family:'Space Grotesk',sans-serif;font-weight:600;font-size:12.5px;cursor:pointer;}
+  .add-event-bar:hover{color:var(--text-dim);background:var(--surface-hover);}
+  .event-form{padding:14px;border-bottom:1px solid var(--border);}
+  .event-form .row{display:flex;gap:8px;margin-bottom:8px;}
+  .event-form input{background:var(--bg);border:1px solid var(--border);border-radius:8px;color:var(--text);font-family:'Inter',sans-serif;font-size:13px;padding:8px 10px;outline:none;}
+  .event-form input:focus{border-color:var(--text-faint);}
+  .event-form input.time-in{width:96px;}
+  .event-form input.emoji-in2{width:48px;text-align:center;font-size:15px;padding:8px 4px;}
+  .event-form input.title-in{flex:1;min-width:0;}
+  .event-form .form-actions{display:flex;gap:8px;justify-content:flex-end;align-items:center;}
+
+  @media (prefers-reduced-motion:reduce){*{transition:none !important;}}
+</style>
+</head>
+<body>
+<div id="app"></div>
+
+<script>
+(function(){
+  const RANK_TIERS = [
+    {min:1,max:2,name:'Recrue'},
+    {min:3,max:5,name:'Sergent'},
+    {min:6,max:9,name:'Officier'},
+    {min:10,max:14,name:'Commandant'},
+    {min:15,max:9999,name:'Général'},
+  ];
+
+  const state = {
+    view:'habits',
+    habits:[],
+    completions:{},
+    brain:{categories:[]},
+    activeCategoryId:null,
+    activeSubtabId:null,
+    addingHabit:false,
+    addingCategory:false,
+    addingSubtab:false,
+    editingId:null,
+    confirmDelete:null,
+    synced:false,
+    events:[],
+    planningDate: null, // set at init to today
+    addingEvent:false,
+  };
+  const GRID_START_HOUR = 6;
+  const GRID_END_HOUR = 23;
+  const ROW_PX = 50;
+
+  function uid(){ return Date.now().toString(36)+Math.random().toString(36).slice(2,7); }
+  function formatDate(d){ const y=d.getFullYear(),m=String(d.getMonth()+1).padStart(2,'0'),day=String(d.getDate()).padStart(2,'0'); return y+'-'+m+'-'+day; }
+  function todayKey(){ return formatDate(new Date()); }
+  function minutesFromMidnight(t){ const [h,m] = t.split(':').map(Number); return h*60+(m||0); }
+  function addDays(dateStr, n){ const d = new Date(dateStr+'T00:00:00'); d.setDate(d.getDate()+n); return formatDate(d); }
+  function getWeekDates(dateStr){
+    const d = new Date(dateStr+'T00:00:00');
+    const dow = (d.getDay()+6)%7; // 0=Mon .. 6=Sun
+    const monday = new Date(d); monday.setDate(d.getDate()-dow);
+    const out = [];
+    for(let i=0;i<7;i++){ const x = new Date(monday); x.setDate(monday.getDate()+i); out.push(formatDate(x)); }
+    return out;
+  }
+  const DOW_LABELS = ['Lun','Mar','Mer','Jeu','Ven','Sam','Dim'];
+  function esc(s){ return (s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;'); }
+
+  function withTimeout(promise, ms, fallbackVal){
+    return Promise.race([
+      Promise.resolve(promise),
+      new Promise(resolve => setTimeout(()=> resolve(fallbackVal), ms))
+    ]);
+  }
+  const TIMED_OUT = Symbol('timeout');
+  const hasClaudeStorage = ()=> typeof window.storage !== 'undefined' && typeof window.storage.get === 'function';
+
+  async function loadKey(key, fallback, timeoutMs){
+    try{
+      if(hasClaudeStorage()){
+        const r = await withTimeout(window.storage.get(key, false), timeoutMs || 2500, TIMED_OUT);
+        if(r === TIMED_OUT) return fallback;
+        return r ? JSON.parse(r.value) : fallback;
+      } else {
+        const raw = localStorage.getItem(key);
+        return raw ? JSON.parse(raw) : fallback;
+      }
+    }catch(e){ return fallback; }
+  }
+  async function saveKey(key, value){
+    try{
+      if(hasClaudeStorage()){
+        await withTimeout(window.storage.set(key, JSON.stringify(value), false), 4000, null);
+      } else {
+        localStorage.setItem(key, JSON.stringify(value));
+      }
+    }
+    catch(e){ console.error('save failed', key, e); }
+  }
+
+  function defaultHabits(){
+    return [
+      {id:uid(), name:'Sport', emoji:'🏋️'},
+      {id:uid(), name:'Boire 2L', emoji:'💧'},
+      {id:uid(), name:'NoFap', emoji:'🔥'},
+      {id:uid(), name:'Méditation', emoji:'🧘'},
+      {id:uid(), name:'Travailler 2h+', emoji:'💼'},
+    ];
+  }
+  function defaultBrain(){
+    return { categories:[
+      {id:uid(), name:'Web Design', emoji:'🎨', subtabs:[{id:uid(), name:'Sites utiles', content:''}]},
+      {id:uid(), name:'Immobilier', emoji:'🏠', subtabs:[{id:uid(), name:'Notes prospection', content:''}]},
+    ]};
+  }
+
+  // ---- derived data ----
+  function getStreak(habitId){
+    let streak=0;
+    let d = new Date();
+    const tKey = formatDate(d);
+    if(!(state.completions[tKey] && state.completions[tKey][habitId])){
+      d.setDate(d.getDate()-1);
+    }
+    while(true){
+      const k = formatDate(d);
+      if(state.completions[k] && state.completions[k][habitId]){
+        streak++;
+        d.setDate(d.getDate()-1);
+      } else break;
+    }
+    return streak;
+  }
+  function getOverallStreak(){
+    if(state.habits.length===0) return 0;
+    let streak=0;
+    let d = new Date();
+    const allDoneOn = (k)=> state.habits.every(h => state.completions[k] && state.completions[k][h.id]);
+    let tKey = formatDate(d);
+    if(!allDoneOn(tKey)) d.setDate(d.getDate()-1);
+    while(true){
+      const k = formatDate(d);
+      if(allDoneOn(k)){ streak++; d.setDate(d.getDate()-1); } else break;
+    }
+    return streak;
+  }
+  function getTotalXP(){
+    let xp=0;
+    for(const day in state.completions){
+      xp += Object.keys(state.completions[day]).filter(hid => state.completions[day][hid]).length * 10;
+    }
+    return xp;
+  }
+  function getRank(level){
+    return RANK_TIERS.find(t => level>=t.min && level<=t.max).name;
+  }
+
+  // ---- actions ----
+  function toggleHabit(habitId){
+    const key = todayKey();
+    if(!state.completions[key]) state.completions[key] = {};
+    if(state.completions[key][habitId]) delete state.completions[key][habitId];
+    else state.completions[key][habitId] = true;
+    saveKey('completions-v1', state.completions);
+    render();
+  }
+
+  function addHabit(name, emoji){
+    if(!name.trim()) return;
+    state.habits.push({id:uid(), name:name.trim(), emoji: emoji.trim() || '⭐'});
+    saveKey('habits-v1', state.habits);
+    state.addingHabit = false;
+    render();
+  }
+  function deleteHabit(id){
+    state.habits = state.habits.filter(h=>h.id!==id);
+    saveKey('habits-v1', state.habits);
+    state.confirmDelete = null;
+    render();
+  }
+  function renameHabit(id, name){
+    const h = state.habits.find(x=>x.id===id);
+    if(h && name.trim()) h.name = name.trim();
+    saveKey('habits-v1', state.habits);
+  }
+
+  function addCategory(name, emoji){
+    if(!name.trim()) return;
+    const cat = {id:uid(), name:name.trim(), emoji: emoji.trim() || '📁', subtabs:[]};
+    state.brain.categories.push(cat);
+    state.activeCategoryId = cat.id;
+    state.activeSubtabId = null;
+    saveKey('brain-v1', state.brain);
+    state.addingCategory = false;
+    render();
+  }
+  function deleteCategory(id){
+    state.brain.categories = state.brain.categories.filter(c=>c.id!==id);
+    if(state.activeCategoryId===id){
+      state.activeCategoryId = state.brain.categories[0] ? state.brain.categories[0].id : null;
+      state.activeSubtabId = null;
+    }
+    saveKey('brain-v1', state.brain);
+    state.confirmDelete = null;
+    render();
+  }
+  function renameCategory(id, name){
+    const c = state.brain.categories.find(x=>x.id===id);
+    if(c && name.trim()) c.name = name.trim();
+    saveKey('brain-v1', state.brain);
+  }
+
+  function addSubtab(catId, name){
+    if(!name.trim()) return;
+    const c = state.brain.categories.find(x=>x.id===catId);
+    if(!c) return;
+    const sub = {id:uid(), name:name.trim(), content:''};
+    c.subtabs.push(sub);
+    state.activeSubtabId = sub.id;
+    saveKey('brain-v1', state.brain);
+    state.addingSubtab = false;
+    render();
+  }
+  function deleteSubtab(catId, subId){
+    const c = state.brain.categories.find(x=>x.id===catId);
+    if(!c) return;
+    c.subtabs = c.subtabs.filter(s=>s.id!==subId);
+    if(state.activeSubtabId===subId){
+      state.activeSubtabId = c.subtabs[0] ? c.subtabs[0].id : null;
+    }
+    saveKey('brain-v1', state.brain);
+    state.confirmDelete = null;
+    render();
+  }
+  function renameSubtab(catId, subId, name){
+    const c = state.brain.categories.find(x=>x.id===catId);
+    if(!c) return;
+    const s = c.subtabs.find(x=>x.id===subId);
+    if(s && name.trim()) s.name = name.trim();
+    saveKey('brain-v1', state.brain);
+  }
+
+  let saveTimer = null;
+  function updateSubtabContent(catId, subId, content){
+    const c = state.brain.categories.find(x=>x.id===catId);
+    if(!c) return;
+    const s = c.subtabs.find(x=>x.id===subId);
+    if(!s) return;
+    s.content = content;
+    clearTimeout(saveTimer);
+    saveTimer = setTimeout(async ()=>{
+      await saveKey('brain-v1', state.brain);
+      const ind = document.getElementById('save-indicator');
+      if(ind){
+        ind.classList.add('show');
+        setTimeout(()=> ind.classList.remove('show'), 1400);
+      }
+    }, 600);
+  }
+
+  function addEvent(date, start, end, title, emoji){
+    if(!title.trim() || !start) return;
+    if(!end || minutesFromMidnight(end) <= minutesFromMidnight(start)){
+      const em = minutesFromMidnight(start)+30;
+      end = String(Math.floor(em/60)%24).padStart(2,'0')+':'+String(em%60).padStart(2,'0');
+    }
+    state.events.push({id:uid(), date, start, end, title:title.trim(), emoji: emoji.trim() || '📌'});
+    saveKey('events-v1', state.events);
+    state.addingEvent = false;
+    render();
+  }
+  function updateEvent(id, start, end, title, emoji){
+    const ev = state.events.find(e=>e.id===id);
+    if(!ev) return;
+    if(!title.trim() || !start) return;
+    if(!end || minutesFromMidnight(end) <= minutesFromMidnight(start)){
+      const em = minutesFromMidnight(start)+30;
+      end = String(Math.floor(em/60)%24).padStart(2,'0')+':'+String(em%60).padStart(2,'0');
+    }
+    ev.start = start; ev.end = end; ev.title = title.trim(); ev.emoji = emoji.trim() || '📌';
+    saveKey('events-v1', state.events);
+    state.editingId = null;
+    render();
+  }
+  function deleteEvent(id){
+    state.events = state.events.filter(e=>e.id!==id);
+    saveKey('events-v1', state.events);
+    state.confirmDelete = null;
+    state.editingId = null;
+    render();
+  }
+
+  // ---- rendering ----
+  function renderHUD(){
+    const xp = getTotalXP();
+    const level = Math.floor(xp/100)+1;
+    const xpInLevel = xp%100;
+    const rank = getRank(level);
+    const streak = getOverallStreak();
+    return `
+      <div class="hud">
+        <div class="hud-top">
+          <div class="hud-rank">
+            <div class="rank-badge">${level}</div>
+            <div>
+              <div class="rank-name">${rank}</div>
+              <div class="rank-sub">NIVEAU ${level}</div>
+            </div>
+          </div>
+          <div class="hud-streak">🔥 <b>${streak}</b> j. d'affilée</div>
+        </div>
+        <div class="xp-track"><div class="xp-fill" style="width:${xpInLevel}%"></div></div>
+        <div class="xp-label"><span>${xpInLevel} / 100 XP</span><span>${xp} XP total</span></div>
+      </div>`;
+  }
+
+  function renderHabits(){
+    const tKey = todayKey();
+    let cards = state.habits.map(h=>{
+      const done = !!(state.completions[tKey] && state.completions[tKey][h.id]);
+      const streak = getStreak(h.id);
+      const editing = state.editingId === 'habit:'+h.id;
+      const confirming = state.confirmDelete === 'habit:'+h.id;
+      if(editing){
+        return `<div class="habit-card">
+          <input class="rename-in" data-rename-type="habit" data-rename-id="${h.id}" value="${esc(h.name)}" autofocus />
+        </div>`;
+      }
+      return `<div class="habit-card ${done?'done':''}">
+        <button class="habit-check" data-action="toggle-habit" data-id="${h.id}">✓</button>
+        <div class="habit-emoji">${h.emoji}</div>
+        <div class="habit-name">${esc(h.name)}</div>
+        <div class="habit-streak ${streak>0?'active':''}">🔥 ${streak}j</div>
+        <div class="habit-tools">
+          <button class="icon-btn" data-action="edit-habit" data-id="${h.id}">✎</button>
+          <button class="icon-btn ${confirming?'danger-active':''}" data-action="delete-habit" data-id="${h.id}">${confirming?'Confirmer':'🗑'}</button>
+        </div>
+      </div>`;
+    }).join('');
+
+    let addBlock;
+    if(state.addingHabit){
+      addBlock = `<form class="inline-form" data-form="add-habit">
+        <div class="row">
+          <input class="emoji-in" name="emoji" placeholder="⭐" maxlength="4">
+          <input class="name-in" name="name" placeholder="Nom de l'habitude" autofocus>
+        </div>
+        <div class="form-actions">
+          <button type="button" class="btn btn-ghost" data-action="cancel-add-habit">Annuler</button>
+          <button type="submit" class="btn btn-primary">Ajouter</button>
+        </div>
+      </form>`;
+    } else {
+      addBlock = `<div class="add-card" data-action="start-add-habit">+ Ajouter une habitude</div>`;
+    }
+
+    return `
+      ${renderHUD()}
+      <div class="section-label">Quêtes du jour</div>
+      <div class="habit-grid">${cards}${addBlock}</div>
+    `;
+  }
+
+  function renderBrain(){
+    const cats = state.brain.categories;
+    if(cats.length===0 && !state.addingCategory){
+      return `
+        <div class="section-label">Deuxième cerveau</div>
+        <div class="brain-empty">Aucune catégorie pour l'instant.</div>
+        <div class="add-card" data-action="start-add-category">+ Créer une catégorie</div>
+      `;
+    }
+    if(!state.activeCategoryId || !cats.find(c=>c.id===state.activeCategoryId)){
+      state.activeCategoryId = cats[0] ? cats[0].id : null;
+    }
+    const activeCat = cats.find(c=>c.id===state.activeCategoryId);
+
+    let catPills = cats.map(c=>{
+      const active = c.id===state.activeCategoryId;
+      const editing = state.editingId === 'cat:'+c.id;
+      const confirming = state.confirmDelete === 'cat:'+c.id;
+      if(editing){
+        return `<input class="rename-in" data-rename-type="category" data-rename-id="${c.id}" value="${esc(c.name)}" autofocus />`;
+      }
+      return `<div class="pill ${active?'active':''} ${confirming?'confirming':''}" data-action="select-category" data-id="${c.id}">
+        <span>${c.emoji} ${esc(c.name)}</span>
+        ${active ? `<span class="x" data-action="edit-category" data-id="${c.id}">✎</span><span class="x" data-action="delete-category" data-id="${c.id}">${confirming?'✕ confirmer':'✕'}</span>` : ''}
+      </div>`;
+    }).join('');
+
+    let catAddBlock = '';
+    if(state.addingCategory){
+      catAddBlock = `<form class="inline-form" data-form="add-category" style="grid-column:auto;flex-shrink:0;">
+        <div class="row">
+          <input class="emoji-in" name="emoji" placeholder="📁" maxlength="4">
+          <input class="name-in" name="name" placeholder="Nom de la catégorie" autofocus style="width:140px;">
+        </div>
+        <div class="form-actions">
+          <button type="button" class="btn btn-ghost" data-action="cancel-add-category">Annuler</button>
+          <button type="submit" class="btn btn-primary">Créer</button>
+        </div>
+      </form>`;
+    }
+
+    let subtabsHTML = '', noteHTML = '';
+    if(activeCat){
+      if(!state.activeSubtabId || !activeCat.subtabs.find(s=>s.id===state.activeSubtabId)){
+        state.activeSubtabId = activeCat.subtabs[0] ? activeCat.subtabs[0].id : null;
+      }
+      let subPills = activeCat.subtabs.map(s=>{
+        const active = s.id===state.activeSubtabId;
+        const editing = state.editingId === 'sub:'+s.id;
+        const confirming = state.confirmDelete === 'sub:'+s.id;
+        if(editing){
+          return `<input class="rename-in" data-rename-type="subtab" data-rename-id="${s.id}" data-rename-parent="${activeCat.id}" value="${esc(s.name)}" autofocus />`;
+        }
+        return `<div class="pill sub ${active?'active':''} ${confirming?'confirming':''}" data-action="select-subtab" data-id="${s.id}">
+          <span>${esc(s.name)}</span>
+          ${active ? `<span class="x" data-action="edit-subtab" data-id="${s.id}">✎</span><span class="x" data-action="delete-subtab" data-id="${s.id}" data-parent="${activeCat.id}">${confirming?'✕ confirmer':'✕'}</span>` : ''}
+        </div>`;
+      }).join('');
+
+      let subAddBlock = '';
+      if(state.addingSubtab){
+        subAddBlock = `<form class="inline-form" data-form="add-subtab" data-parent="${activeCat.id}" style="grid-column:auto;flex-shrink:0;">
+          <div class="row">
+            <input class="name-in" name="name" placeholder="Nom du sous-onglet" autofocus style="width:160px;">
+          </div>
+          <div class="form-actions">
+            <button type="button" class="btn btn-ghost" data-action="cancel-add-subtab">Annuler</button>
+            <button type="submit" class="btn btn-primary">Créer</button>
+          </div>
+        </form>`;
+      } else {
+        subAddBlock = `<div class="pill-add" data-action="start-add-subtab">+</div>`;
+      }
+
+      subtabsHTML = `<div class="pill-row">${subPills}${subAddBlock}</div>`;
+
+      const activeSub = activeCat.subtabs.find(s=>s.id===state.activeSubtabId);
+      if(activeSub){
+        noteHTML = `<div class="note-wrap">
+          <div class="note-head">
+            <span class="note-title">${esc(activeCat.name)} / ${esc(activeSub.name)}</span>
+            <span class="save-indicator" id="save-indicator">Enregistré ✓</span>
+          </div>
+          <textarea class="note-textarea" data-cat-id="${activeCat.id}" data-sub-id="${activeSub.id}" placeholder="Écris tes notes ici…">${esc(activeSub.content)}</textarea>
+        </div>`;
+      } else {
+        noteHTML = `<div class="brain-empty">Aucun sous-onglet. Crée-en un pour commencer à écrire.</div>`;
+      }
+    }
+
+    return `
+      <div class="section-label">Deuxième cerveau</div>
+      <div class="pill-row">${catPills}${catAddBlock}<div class="pill-add" data-action="start-add-category" ${state.addingCategory?'style="display:none"':''}>+</div></div>
+      ${activeCat ? subtabsHTML + noteHTML : ''}
+    `;
+  }
+
+  function renderPlanning(){
+    const dateStr = state.planningDate;
+    const week = getWeekDates(dateStr);
+    const isTodaySelected = dateStr === todayKey();
+
+    const weekStrip = week.map((d, i)=>{
+      const dNum = parseInt(d.slice(8,10),10);
+      const active = d === dateStr;
+      const isToday = d === todayKey();
+      return `<div class="day-pill ${active?'active':''} ${isToday?'is-today':''}" data-action="select-day" data-id="${d}">
+        <div class="dow">${DOW_LABELS[i]}</div>
+        <div class="dnum">${dNum}</div>
+      </div>`;
+    }).join('');
+
+    let formHTML = '';
+    const editingEvent = state.editingId && state.editingId.startsWith('event:')
+      ? state.events.find(e=>e.id===state.editingId.slice(6)) : null;
+
+    if(editingEvent){
+      const confirming = state.confirmDelete === 'event:'+editingEvent.id;
+      formHTML = `<form class="event-form" data-form="edit-event" data-id="${editingEvent.id}">
+        <div class="row">
+          <input class="emoji-in2" name="emoji" value="${esc(editingEvent.emoji)}" maxlength="4">
+          <input class="title-in" name="title" value="${esc(editingEvent.title)}" placeholder="Titre">
+        </div>
+        <div class="row">
+          <input class="time-in" type="time" name="start" value="${editingEvent.start}">
+          <input class="time-in" type="time" name="end" value="${editingEvent.end}">
+        </div>
+        <div class="form-actions">
+          <button type="button" class="btn ${confirming?'':'btn-ghost'}" style="${confirming?'background:var(--danger);color:#2a0f0b;':''}" data-action="delete-event" data-id="${editingEvent.id}">${confirming?'Confirmer':'🗑 Supprimer'}</button>
+          <button type="button" class="btn btn-ghost" data-action="cancel-edit-event">Annuler</button>
+          <button type="submit" class="btn btn-primary">Enregistrer</button>
+        </div>
+      </form>`;
+    } else if(state.addingEvent){
+      formHTML = `<form class="event-form" data-form="add-event">
+        <div class="row">
+          <input class="emoji-in2" name="emoji" placeholder="📌" maxlength="4">
+          <input class="title-in" name="title" placeholder="Titre de l'évènement" autofocus>
+        </div>
+        <div class="row">
+          <input class="time-in" type="time" name="start" value="09:00">
+          <input class="time-in" type="time" name="end" value="10:00">
+        </div>
+        <div class="form-actions">
+          <button type="button" class="btn btn-ghost" data-action="cancel-add-event">Annuler</button>
+          <button type="submit" class="btn btn-primary">Ajouter</button>
+        </div>
+      </form>`;
+    }
+
+    const addBar = (!state.addingEvent && !editingEvent)
+      ? `<div class="add-event-bar" data-action="start-add-event">+ Ajouter un évènement</div>` : '';
+
+    const gridHeight = (GRID_END_HOUR - GRID_START_HOUR) * ROW_PX + 30;
+    let hourLabels = '';
+    for(let h=GRID_START_HOUR; h<=GRID_END_HOUR; h++){
+      const top = (h - GRID_START_HOUR) * ROW_PX;
+      hourLabels += `<div class="hour-label" style="top:${top}px">${String(h).padStart(2,'0')}:00</div>`;
+    }
+
+    const dayEvents = state.events.filter(e=>e.date===dateStr).sort((a,b)=> minutesFromMidnight(a.start)-minutesFromMidnight(b.start));
+    let eventBlocks = dayEvents.map(ev=>{
+      const top = (minutesFromMidnight(ev.start) - GRID_START_HOUR*60) * (ROW_PX/60);
+      const height = Math.max(24, (minutesFromMidnight(ev.end) - minutesFromMidnight(ev.start)) * (ROW_PX/60));
+      return `<div class="event-block" style="top:${top}px;height:${height}px" data-action="edit-event" data-id="${ev.id}">
+        <div class="event-title">${ev.emoji} ${esc(ev.title)}</div>
+        <div class="event-time">${ev.start} – ${ev.end}</div>
+      </div>`;
+    }).join('');
+
+    let nowLine = '';
+    if(isTodaySelected){
+      const now = new Date();
+      const nowMin = now.getHours()*60+now.getMinutes();
+      if(nowMin >= GRID_START_HOUR*60 && nowMin <= GRID_END_HOUR*60){
+        const top = (nowMin - GRID_START_HOUR*60) * (ROW_PX/60);
+        nowLine = `<div class="now-line" style="top:${top}px"></div>`;
+      }
+    }
+
+    return `
+      <div class="section-label">Planning</div>
+      <div class="week-nav">
+        <button class="arrow" data-action="shift-week" data-dir="-7">‹</button>
+        <button class="today-btn" data-action="go-today">Aujourd'hui</button>
+        <button class="arrow" data-action="shift-week" data-dir="7">›</button>
+      </div>
+      <div class="week-strip">${weekStrip}</div>
+      <div class="agenda-wrap">
+        ${addBar}
+        ${formHTML}
+        <div class="agenda-scroll">
+          <div class="agenda-grid" style="height:${gridHeight}px">
+            ${hourLabels}
+            ${eventBlocks}
+            ${nowLine}
+          </div>
+        </div>
+      </div>
+    `;
+  }
+
+  function render(){
+    const today = new Date().toLocaleDateString('fr-FR', {weekday:'long', day:'numeric', month:'long'});
+    document.getElementById('app').innerHTML = `
+      <div class="header">
+        <div class="brand">Q<span>G</span></div>
+        <div class="date">${today}</div>
+      </div>
+      <div class="nav-switch">
+        <button class="tab-habits ${state.view==='habits'?'active':''}" data-action="switch-view" data-view="habits">🎯 Habitudes</button>
+        <button class="tab-brain ${state.view==='brain'?'active':''}" data-action="switch-view" data-view="brain">🧠 Cerveau</button>
+        <button class="tab-planning ${state.view==='planning'?'active':''}" data-action="switch-view" data-view="planning">📅 Planning</button>
+      </div>
+      ${state.view==='habits' ? renderHabits() : state.view==='brain' ? renderBrain() : renderPlanning()}
+      ${!state.synced ? '<div class="sync-note">Synchronisation en cours…</div>' : ''}
+    `;
+    const focusEl = document.querySelector('.rename-in, .inline-form input');
+    if(focusEl){ focusEl.focus(); if(focusEl.value) focusEl.setSelectionRange(focusEl.value.length, focusEl.value.length); }
+  }
+
+  // ---- event delegation ----
+  document.addEventListener('click', (e)=>{
+    const el = e.target.closest('[data-action]');
+    if(!el) return;
+    const action = el.dataset.action;
+    const id = el.dataset.id;
+
+    switch(action){
+      case 'switch-view':
+        state.view = el.dataset.view;
+        state.confirmDelete = null; state.editingId = null;
+        render();
+        break;
+      case 'toggle-habit':
+        toggleHabit(id); break;
+      case 'start-add-habit':
+        state.addingHabit = true; render(); break;
+      case 'cancel-add-habit':
+        state.addingHabit = false; render(); break;
+      case 'edit-habit':
+        state.editingId = 'habit:'+id; state.confirmDelete=null; render(); break;
+      case 'delete-habit':
+        if(state.confirmDelete === 'habit:'+id) deleteHabit(id);
+        else { state.confirmDelete = 'habit:'+id; render(); }
+        break;
+
+      case 'start-add-category':
+        state.addingCategory = true; render(); break;
+      case 'cancel-add-category':
+        state.addingCategory = false; render(); break;
+      case 'select-category':
+        state.activeCategoryId = id; state.activeSubtabId = null; state.confirmDelete=null; render(); break;
+      case 'edit-category':
+        state.editingId = 'cat:'+id; state.confirmDelete=null; render(); break;
+      case 'delete-category':
+        if(state.confirmDelete === 'cat:'+id) deleteCategory(id);
+        else { state.confirmDelete = 'cat:'+id; render(); }
+        break;
+
+      case 'start-add-subtab':
+        state.addingSubtab = true; render(); break;
+      case 'cancel-add-subtab':
+        state.addingSubtab = false; render(); break;
+      case 'select-subtab':
+        state.activeSubtabId = id; state.confirmDelete=null; render(); break;
+      case 'edit-subtab':
+        state.editingId = 'sub:'+id; state.confirmDelete=null; render(); break;
+      case 'delete-subtab':
+        if(state.confirmDelete === 'sub:'+id) deleteSubtab(el.dataset.parent, id);
+        else { state.confirmDelete = 'sub:'+id; render(); }
+        break;
+
+      case 'shift-week':
+        state.planningDate = addDays(state.planningDate, parseInt(el.dataset.dir,10));
+        render();
+        break;
+      case 'go-today':
+        state.planningDate = todayKey();
+        render();
+        break;
+      case 'select-day':
+        state.planningDate = id;
+        render();
+        break;
+      case 'start-add-event':
+        state.addingEvent = true; state.editingId = null; render(); break;
+      case 'cancel-add-event':
+        state.addingEvent = false; render(); break;
+      case 'edit-event':
+        state.editingId = 'event:'+id; state.addingEvent = false; state.confirmDelete = null; render(); break;
+      case 'cancel-edit-event':
+        state.editingId = null; state.confirmDelete = null; render(); break;
+      case 'delete-event':
+        if(state.confirmDelete === 'event:'+id) deleteEvent(id);
+        else { state.confirmDelete = 'event:'+id; render(); }
+        break;
+    }
+  });
+
+  document.addEventListener('submit', (e)=>{
+    const form = e.target.closest('form[data-form]');
+    if(!form) return;
+    e.preventDefault();
+    const type = form.dataset.form;
+    if(type==='add-habit'){
+      addHabit(form.name.value, form.emoji.value);
+    } else if(type==='add-category'){
+      addCategory(form.name.value, form.emoji.value);
+    } else if(type==='add-subtab'){
+      addSubtab(form.dataset.parent, form.name.value);
+    } else if(type==='add-event'){
+      addEvent(state.planningDate, form.start.value, form.end.value, form.title.value, form.emoji.value);
+    } else if(type==='edit-event'){
+      updateEvent(form.dataset.id, form.start.value, form.end.value, form.title.value, form.emoji.value);
+    }
+  });
+
+  document.addEventListener('blur', (e)=>{
+    if(e.target.matches && e.target.matches('.rename-in')){
+      const type = e.target.dataset.renameType;
+      const id = e.target.dataset.renameId;
+      const val = e.target.value;
+      if(type==='habit') renameHabit(id, val);
+      else if(type==='category') renameCategory(id, val);
+      else if(type==='subtab') renameSubtab(e.target.dataset.renameParent, id, val);
+      state.editingId = null;
+      render();
+    }
+  }, true);
+
+  document.addEventListener('keydown', (e)=>{
+    if(e.target.matches && e.target.matches('.rename-in') && e.key==='Enter'){
+      e.preventDefault();
+      e.target.blur();
+    }
+  });
+
+  document.addEventListener('input', (e)=>{
+    if(e.target.matches && e.target.matches('.note-textarea')){
+      updateSubtabContent(e.target.dataset.catId, e.target.dataset.subId, e.target.value);
+    }
+  });
+
+  // ---- init ----
+  // 1. Show the app immediately with sensible defaults so nothing ever blocks on loading.
+  state.habits = defaultHabits();
+  state.brain = defaultBrain();
+  state.activeCategoryId = state.brain.categories[0].id;
+  state.planningDate = todayKey();
+  render();
+
+  // 2. Try to sync with saved data in the background (times out gracefully if storage is slow/unavailable).
+  (async function sync(){
+    try{
+      const [habits, completions, brain, events] = await Promise.all([
+        loadKey('habits-v1', null),
+        loadKey('completions-v1', {}),
+        loadKey('brain-v1', null),
+        loadKey('events-v1', []),
+      ]);
+      if(habits) state.habits = habits;
+      if(completions) state.completions = completions;
+      if(brain) state.brain = brain;
+      if(events) state.events = events;
+      if(state.brain.categories[0] && !state.brain.categories.find(c=>c.id===state.activeCategoryId)){
+        state.activeCategoryId = state.brain.categories[0].id;
+      }
+      if(!habits) saveKey('habits-v1', state.habits);
+      if(!brain) saveKey('brain-v1', state.brain);
+    } catch(e){
+      console.error('sync error', e);
+    } finally {
+      state.synced = true;
+      render();
+    }
+  })();
+
+  // 3. Keep the "now" line in the planning view fresh.
+  setInterval(()=>{
+    if(state.view==='planning') render();
+  }, 60000);
+})();
+</script>
+</body>
+</html>
