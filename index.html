@@ -253,36 +253,36 @@
   }
 
   async function loadKey(key, fallback, timeoutMs){
+    let remoteVal;
     try{
       if(hasClaudeStorage()){
         const r = await withTimeout(window.storage.get(key, false), timeoutMs || 2500, TIMED_OUT);
-        if(r === TIMED_OUT) return fallback;
-        return r ? JSON.parse(r.value) : fallback;
+        if(r !== TIMED_OUT && r) remoteVal = JSON.parse(r.value);
       } else if(supabaseClient){
         const nsKey = SPACE_CODE + '::' + key;
         const val = await withTimeout(supaGetValue(nsKey), timeoutMs || 4000, TIMED_OUT);
-        if(val === TIMED_OUT || val === null || val === undefined){
-          const raw = localStorage.getItem(key);
-          return raw ? JSON.parse(raw) : fallback;
-        }
-        localStorage.setItem(key, JSON.stringify(val));
-        return val;
-      } else {
-        const raw = localStorage.getItem(key);
-        return raw ? JSON.parse(raw) : fallback;
+        if(val !== TIMED_OUT && val !== null && val !== undefined) remoteVal = val;
       }
-    }catch(e){ return fallback; }
+    }catch(e){ /* fall through to local cache */ }
+
+    if(remoteVal !== undefined){
+      try{ localStorage.setItem(key, JSON.stringify(remoteVal)); }catch(e){}
+      return remoteVal;
+    }
+    try{
+      const raw = localStorage.getItem(key);
+      if(raw) return JSON.parse(raw);
+    }catch(e){}
+    return fallback;
   }
   async function saveKey(key, value){
+    try{ localStorage.setItem(key, JSON.stringify(value)); }catch(e){}
     try{
       if(hasClaudeStorage()){
         await withTimeout(window.storage.set(key, JSON.stringify(value), false), 4000, null);
       } else if(supabaseClient){
-        localStorage.setItem(key, JSON.stringify(value));
         const nsKey = SPACE_CODE + '::' + key;
         await withTimeout(supaSetValue(nsKey, value), 6000, null);
-      } else {
-        localStorage.setItem(key, JSON.stringify(value));
       }
     }
     catch(e){ console.error('save failed', key, e); }
