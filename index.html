@@ -126,6 +126,11 @@
 
   .sync-note{text-align:center;font-family:'JetBrains Mono',monospace;font-size:10px;color:var(--text-faint);margin-top:18px;opacity:0.7;}
 
+  .coach-card{display:flex;align-items:flex-start;gap:10px;background:var(--bg-elevated);border:1px solid var(--border);border-left:3px solid var(--gold);border-radius:12px;padding:12px 14px;margin-bottom:18px;}
+  .coach-icon{font-size:18px;line-height:1.3;flex-shrink:0;}
+  .coach-text{font-size:13px;color:var(--text-dim);line-height:1.5;}
+  .coach-label{font-family:'JetBrains Mono',monospace;font-size:9.5px;color:var(--text-faint);text-transform:uppercase;letter-spacing:0.06em;display:block;margin-bottom:3px;}
+
   /* Planning */
   .week-nav{display:flex;align-items:center;gap:6px;margin-bottom:10px;}
   .week-nav .arrow{background:var(--surface);border:1px solid var(--border);color:var(--text-dim);width:32px;height:32px;border-radius:9px;cursor:pointer;font-size:14px;flex-shrink:0;}
@@ -160,6 +165,9 @@
   .event-form input.emoji-in2{width:48px;text-align:center;font-size:15px;padding:8px 4px;}
   .event-form input.title-in{flex:1;min-width:0;}
   .event-form .form-actions{display:flex;gap:8px;justify-content:flex-end;align-items:center;}
+  .event-form select.remind-select{background:var(--bg);border:1px solid var(--border);border-radius:8px;color:var(--text);font-family:'Inter',sans-serif;font-size:12.5px;padding:8px 10px;outline:none;flex:1;}
+  .notif-banner{display:flex;align-items:center;justify-content:space-between;gap:10px;background:var(--violet-dim);border:1px solid rgba(144,136,232,0.4);border-radius:12px;padding:10px 12px;margin-bottom:12px;font-size:12.5px;color:var(--text-dim);}
+  .notif-banner button{background:var(--violet);color:#151233;border:none;font-family:'Space Grotesk',sans-serif;font-weight:600;font-size:12px;padding:7px 12px;border-radius:8px;cursor:pointer;white-space:nowrap;}
 
   @media (prefers-reduced-motion:reduce){*{transition:none !important;}}
 </style>
@@ -345,6 +353,59 @@
     return RANK_TIERS.find(t => level>=t.min && level<=t.max).name;
   }
 
+  function getCoachMessage(){
+    const tKey = todayKey();
+    const now = new Date();
+    const nowMin = now.getHours()*60 + now.getMinutes();
+
+    if(state.habits.length===0){
+      return {icon:'🧭', text:"Ajoute ta première habitude pour que je puisse commencer à te suivre."};
+    }
+
+    // 1. Événement du jour dans les 2h
+    const todaysEvents = state.events
+      .filter(e=>e.date===tKey)
+      .map(e=>({...e, mins:minutesFromMidnight(e.start)}))
+      .filter(e=> e.mins>=nowMin && e.mins-nowMin<=120)
+      .sort((a,b)=>a.mins-b.mins);
+    if(todaysEvents[0]){
+      const diff = todaysEvents[0].mins - nowMin;
+      const when = diff<=15 ? "dans quelques minutes" : `dans ~${Math.round(diff/15)*15} min`;
+      return {icon:'⏰', text:`${todaysEvents[0].emoji} ${todaysEvents[0].title} ${when} (${todaysEvents[0].start}).`};
+    }
+
+    const doneToday = state.completions[tKey] || {};
+    const notDone = state.habits.filter(h=>!doneToday[h.id]);
+
+    // 2. Streak en danger
+    if(notDone.length>0){
+      let best = null;
+      notDone.forEach(h=>{
+        const s = getStreak(h.id);
+        if(s>0 && (!best || s>best.s)) best = {h, s};
+      });
+      if(best && nowMin >= 19*60){
+        return {icon:'🚨', text:`Ton streak "${best.h.name}" (${best.s}j) casse ce soir si tu ne le fais pas maintenant !`};
+      }
+      if(best){
+        return {icon:'🔥', text:`Garde ton streak "${best.h.name}" (${best.s}j) vivant — tu as encore le temps aujourd'hui.`};
+      }
+      if(nowMin < 12*60){
+        return {icon:'☀️', text:`Encore rien de coché ce matin. Commence par une habitude facile pour lancer la machine.`};
+      }
+      return {icon:'🎯', text:`Il te reste ${notDone.length} quête${notDone.length>1?'s':''} aujourd'hui : ${notDone.map(h=>h.name).join(', ')}.`};
+    }
+
+    // 3. Tout est fait
+    const xp = getTotalXP();
+    const level = Math.floor(xp/100)+1;
+    const xpInLevel = xp % 100;
+    if(xpInLevel >= 80){
+      return {icon:'⭐', text:`Toutes tes quêtes sont bouclées ! Plus que ${100-xpInLevel} XP avant le niveau ${level+1}.`};
+    }
+    return {icon:'🎖️', text:'Toutes tes quêtes du jour sont bouclées. Bravo, soldat.'};
+  }
+
   // ---- actions ----
   function toggleHabit(habitId){
     const key = todayKey();
@@ -448,18 +509,18 @@
     }, 600);
   }
 
-  function addEvent(date, start, end, title, emoji){
+  function addEvent(date, start, end, title, emoji, remind){
     if(!title.trim() || !start) return;
     if(!end || minutesFromMidnight(end) <= minutesFromMidnight(start)){
       const em = minutesFromMidnight(start)+30;
       end = String(Math.floor(em/60)%24).padStart(2,'0')+':'+String(em%60).padStart(2,'0');
     }
-    state.events.push({id:uid(), date, start, end, title:title.trim(), emoji: emoji.trim() || '📌'});
+    state.events.push({id:uid(), date, start, end, title:title.trim(), emoji: emoji.trim() || '📌', remind: parseInt(remind,10)||0});
     saveKey('events-v1', state.events);
     state.addingEvent = false;
     render();
   }
-  function updateEvent(id, start, end, title, emoji){
+  function updateEvent(id, start, end, title, emoji, remind){
     const ev = state.events.find(e=>e.id===id);
     if(!ev) return;
     if(!title.trim() || !start) return;
@@ -467,7 +528,7 @@
       const em = minutesFromMidnight(start)+30;
       end = String(Math.floor(em/60)%24).padStart(2,'0')+':'+String(em%60).padStart(2,'0');
     }
-    ev.start = start; ev.end = end; ev.title = title.trim(); ev.emoji = emoji.trim() || '📌';
+    ev.start = start; ev.end = end; ev.title = title.trim(); ev.emoji = emoji.trim() || '📌'; ev.remind = parseInt(remind,10)||0;
     saveKey('events-v1', state.events);
     state.editingId = null;
     render();
@@ -546,9 +607,18 @@
 
     return `
       ${renderHUD()}
+      ${renderCoachCard()}
       <div class="section-label">Quêtes du jour</div>
       <div class="habit-grid">${cards}${addBlock}</div>
     `;
+  }
+
+  function renderCoachCard(){
+    const msg = getCoachMessage();
+    return `<div class="coach-card">
+      <div class="coach-icon">${msg.icon}</div>
+      <div><span class="coach-label">Le Coach</span><div class="coach-text">${esc(msg.text)}</div></div>
+    </div>`;
   }
 
   function renderBrain(){
@@ -678,6 +748,16 @@
           <input class="time-in" type="time" name="start" value="${editingEvent.start}">
           <input class="time-in" type="time" name="end" value="${editingEvent.end}">
         </div>
+        <div class="row">
+          <select name="remind" class="remind-select">
+            <option value="0" ${!editingEvent.remind?'selected':''}>Pas de rappel</option>
+            <option value="15" ${editingEvent.remind===15?'selected':''}>15 min avant</option>
+            <option value="30" ${editingEvent.remind===30?'selected':''}>30 min avant</option>
+            <option value="60" ${editingEvent.remind===60?'selected':''}>1h avant</option>
+            <option value="120" ${editingEvent.remind===120?'selected':''}>2h avant</option>
+            <option value="1440" ${editingEvent.remind===1440?'selected':''}>1 jour avant</option>
+          </select>
+        </div>
         <div class="form-actions">
           <button type="button" class="btn ${confirming?'':'btn-ghost'}" style="${confirming?'background:var(--danger);color:#2a0f0b;':''}" data-action="delete-event" data-id="${editingEvent.id}">${confirming?'Confirmer':'🗑 Supprimer'}</button>
           <button type="button" class="btn btn-ghost" data-action="cancel-edit-event">Annuler</button>
@@ -693,6 +773,16 @@
         <div class="row">
           <input class="time-in" type="time" name="start" value="09:00">
           <input class="time-in" type="time" name="end" value="10:00">
+        </div>
+        <div class="row">
+          <select name="remind" class="remind-select">
+            <option value="0">Pas de rappel</option>
+            <option value="15">15 min avant</option>
+            <option value="30">30 min avant</option>
+            <option value="60" selected>1h avant</option>
+            <option value="120">2h avant</option>
+            <option value="1440">1 jour avant</option>
+          </select>
         </div>
         <div class="form-actions">
           <button type="button" class="btn btn-ghost" data-action="cancel-add-event">Annuler</button>
@@ -733,6 +823,7 @@
 
     return `
       <div class="section-label">Planning</div>
+      ${renderNotifBanner()}
       <div class="week-nav">
         <button class="arrow" data-action="shift-week" data-dir="-7">‹</button>
         <button class="today-btn" data-action="go-today">Aujourd'hui</button>
@@ -751,6 +842,44 @@
         </div>
       </div>
     `;
+  }
+
+  function renderNotifBanner(){
+    if(typeof Notification === 'undefined') return '';
+    if(Notification.permission === 'granted'){
+      return `<div class="notif-banner">🔔 Rappels activés — tant que le site est ouvert dans un onglet.</div>`;
+    }
+    if(Notification.permission === 'denied'){
+      return `<div class="notif-banner">🔕 Notifications bloquées par le navigateur. Autorise-les dans les réglages du site pour recevoir les rappels.</div>`;
+    }
+    return `<div class="notif-banner"><span>Active les notifications pour recevoir tes rappels d'évènements.</span><button data-action="enable-notifs">Activer</button></div>`;
+  }
+
+  function checkReminders(){
+    if(typeof Notification === 'undefined' || Notification.permission !== 'granted') return;
+    const now = new Date();
+    const nowMin = now.getHours()*60 + now.getMinutes();
+    const todayStr = todayKey();
+    let notified = [];
+    try{ notified = JSON.parse(localStorage.getItem('qg-notified') || '[]'); }catch(e){}
+    let changed = false;
+    state.events.forEach(ev=>{
+      if(!ev.remind || ev.remind<=0) return;
+      const evMin = minutesFromMidnight(ev.start);
+      const triggerMin = evMin - ev.remind;
+      const notifKey = ev.id+':'+ev.date;
+      const isRelevantDay = ev.date === todayStr || (ev.remind>=1440 && ev.date === addDays(todayStr,1));
+      if(!isRelevantDay) return;
+      const effectiveNowMin = ev.date===todayStr ? nowMin : nowMin - 1440;
+      if(effectiveNowMin >= triggerMin && effectiveNowMin <= evMin && !notified.includes(notifKey)){
+        try{ new Notification(`${ev.emoji} ${ev.title}`, { body: `Prévu à ${ev.start} (dans ~${ev.remind} min)` }); }catch(e){}
+        notified.push(notifKey);
+        changed = true;
+      }
+    });
+    if(changed){
+      try{ localStorage.setItem('qg-notified', JSON.stringify(notified.slice(-300))); }catch(e){}
+    }
   }
 
   function render(){
@@ -855,6 +984,11 @@
           location.reload();
         }
         break;
+      case 'enable-notifs':
+        if(typeof Notification !== 'undefined'){
+          Notification.requestPermission().then(()=> render());
+        }
+        break;
     }
   });
 
@@ -870,9 +1004,9 @@
     } else if(type==='add-subtab'){
       addSubtab(form.dataset.parent, form.name.value);
     } else if(type==='add-event'){
-      addEvent(state.planningDate, form.start.value, form.end.value, form.title.value, form.emoji.value);
+      addEvent(state.planningDate, form.start.value, form.end.value, form.title.value, form.emoji.value, form.remind.value);
     } else if(type==='edit-event'){
-      updateEvent(form.dataset.id, form.start.value, form.end.value, form.title.value, form.emoji.value);
+      updateEvent(form.dataset.id, form.start.value, form.end.value, form.title.value, form.emoji.value, form.remind.value);
     }
   });
 
@@ -936,10 +1070,12 @@
     }
   })();
 
-  // 3. Keep the "now" line in the planning view fresh.
+  // 3. Keep the "now" line fresh and check event reminders.
+  checkReminders();
   setInterval(()=>{
+    checkReminders();
     if(state.view==='planning') render();
-  }, 60000);
+  }, 30000);
 })();
 </script>
 </body>
