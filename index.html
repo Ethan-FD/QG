@@ -167,6 +167,8 @@
   .event-form input.title-in{flex:1;min-width:0;}
   .event-form .form-actions{display:flex;gap:8px;justify-content:flex-end;align-items:center;}
   .event-form select.remind-select{background:var(--bg);border:1px solid var(--border);border-radius:8px;color:var(--text);font-family:'Inter',sans-serif;font-size:12.5px;padding:8px 10px;outline:none;flex:1;}
+  .event-form textarea.desc-textarea{width:100%;min-height:52px;background:var(--bg);border:1px solid var(--border);border-radius:8px;color:var(--text);font-family:'Inter',sans-serif;font-size:12.5px;padding:8px 10px;outline:none;resize:vertical;}
+  .event-form textarea.desc-textarea:focus{border-color:var(--text-faint);}
   .notif-banner{display:flex;align-items:center;justify-content:space-between;gap:10px;background:var(--violet-dim);border:1px solid rgba(144,136,232,0.4);border-radius:12px;padding:10px 12px;margin-bottom:12px;font-size:12.5px;color:var(--text-dim);}
   .notif-banner button{background:var(--violet);color:#151233;border:none;font-family:'Space Grotesk',sans-serif;font-weight:600;font-size:12px;padding:7px 12px;border-radius:8px;cursor:pointer;white-space:nowrap;}
   .gcal-banner{display:flex;align-items:center;justify-content:space-between;gap:10px;background:var(--gold-dim);border:1px solid rgba(232,180,84,0.4);border-radius:12px;padding:10px 12px;margin-bottom:12px;font-size:12.5px;color:var(--text-dim);}
@@ -224,6 +226,30 @@
     return out;
   }
   const DOW_LABELS = ['Lun','Mar','Mer','Jeu','Ven','Sam','Dim'];
+  const RECUR_LABELS = {daily:'Tous les jours', weekly:'Toutes les semaines', weekdays:'Jours de semaine', monthly:'Tous les mois'};
+  function generateRecurrenceDates(startDate, freq, untilDate){
+    const dates = [];
+    let d = startDate;
+    let guard = 0;
+    while(d <= untilDate && guard < 366){
+      guard++;
+      if(freq==='daily'){ dates.push(d); d = addDays(d,1); }
+      else if(freq==='weekly'){ dates.push(d); d = addDays(d,7); }
+      else if(freq==='weekdays'){
+        const dow = new Date(d+'T00:00:00').getDay();
+        if(dow!==0 && dow!==6) dates.push(d);
+        d = addDays(d,1);
+      }
+      else if(freq==='monthly'){
+        dates.push(d);
+        const dt = new Date(d+'T00:00:00');
+        dt.setMonth(dt.getMonth()+1);
+        d = formatDate(dt);
+      }
+      else { dates.push(d); break; }
+    }
+    return dates;
+  }
   function esc(s){ return (s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;'); }
 
   function withTimeout(promise, ms, fallbackVal){
@@ -300,6 +326,7 @@
     try{
       const body = {
         summary: `${ev.emoji} ${ev.title}`,
+        description: ev.description || '',
         start:{ dateTime:`${ev.date}T${ev.start}:00`, timeZone:TZ },
         end:{ dateTime:`${ev.date}T${ev.end}:00`, timeZone:TZ },
         extendedProperties:{ private:{ qgId: ev.id } }
@@ -313,6 +340,7 @@
     try{
       const body = {
         summary: `${ev.emoji} ${ev.title}`,
+        description: ev.description || '',
         start:{ dateTime:`${ev.date}T${ev.start}:00`, timeZone:TZ },
         end:{ dateTime:`${ev.date}T${ev.end}:00`, timeZone:TZ },
       };
@@ -345,7 +373,7 @@
           id:uid(), date:formatDate(s),
           start:String(s.getHours()).padStart(2,'0')+':'+String(s.getMinutes()).padStart(2,'0'),
           end:String(e.getHours()).padStart(2,'0')+':'+String(e.getMinutes()).padStart(2,'0'),
-          title: item.summary || '(Sans titre)', emoji:'📅', remind:0, gcalId:item.id
+          title: item.summary || '(Sans titre)', emoji:'📅', remind:0, description: item.description || '', gcalId:item.id
         });
         changed = true;
       });
@@ -611,19 +639,27 @@
     }, 600);
   }
 
-  function addEvent(date, start, end, title, emoji, remind){
+  function addEvent(date, start, end, title, emoji, remind, description, recurrence, recurUntil){
     if(!title.trim() || !start) return;
     if(!end || minutesFromMidnight(end) <= minutesFromMidnight(start)){
       const em = minutesFromMidnight(start)+30;
       end = String(Math.floor(em/60)%24).padStart(2,'0')+':'+String(em%60).padStart(2,'0');
     }
-    state.events.push({id:uid(), date, start, end, title:title.trim(), emoji: emoji.trim() || '📌', remind: parseInt(remind,10)||0});
+    const useRecur = recurrence && recurrence!=='none' && recurUntil;
+    const groupId = useRecur ? uid() : null;
+    const dates = useRecur ? generateRecurrenceDates(date, recurrence, recurUntil) : [date];
+    const newEvents = dates.map(d => ({
+      id:uid(), date:d, start, end, title:title.trim(), emoji: emoji.trim() || '📌',
+      remind: parseInt(remind,10)||0, description:(description||'').trim(),
+      recurrenceGroupId: groupId, recurrenceLabel: groupId ? RECUR_LABELS[recurrence] : null
+    }));
+    state.events.push(...newEvents);
     saveKey('events-v1', state.events);
     state.addingEvent = false;
     render();
-    if(googleAccessToken) gcalCreate(state.events[state.events.length-1]);
+    if(googleAccessToken) pushEventsToGoogleSequential(newEvents);
   }
-  function updateEvent(id, start, end, title, emoji, remind){
+  function updateEvent(id, start, end, title, emoji, remind, description){
     const ev = state.events.find(e=>e.id===id);
     if(!ev) return;
     if(!title.trim() || !start) return;
@@ -631,20 +667,35 @@
       const em = minutesFromMidnight(start)+30;
       end = String(Math.floor(em/60)%24).padStart(2,'0')+':'+String(em%60).padStart(2,'0');
     }
-    ev.start = start; ev.end = end; ev.title = title.trim(); ev.emoji = emoji.trim() || '📌'; ev.remind = parseInt(remind,10)||0;
+    ev.start = start; ev.end = end; ev.title = title.trim(); ev.emoji = emoji.trim() || '📌';
+    ev.remind = parseInt(remind,10)||0; ev.description = (description||'').trim();
     saveKey('events-v1', state.events);
     state.editingId = null;
     render();
     if(googleAccessToken){ if(ev.gcalId) gcalUpdate(ev); else gcalCreate(ev); }
   }
-  function deleteEvent(id){
+  function deleteEvent(id, wholeSeries){
     const ev = state.events.find(e=>e.id===id);
-    state.events = state.events.filter(e=>e.id!==id);
+    if(!ev) return;
+    let toDelete = [ev];
+    if(wholeSeries && ev.recurrenceGroupId){
+      toDelete = state.events.filter(e=>e.recurrenceGroupId===ev.recurrenceGroupId);
+    }
+    const idSet = new Set(toDelete.map(e=>e.id));
+    state.events = state.events.filter(e=>!idSet.has(e.id));
     saveKey('events-v1', state.events);
     state.confirmDelete = null;
     state.editingId = null;
     render();
-    if(googleAccessToken && ev && ev.gcalId) gcalDelete(ev);
+    if(googleAccessToken){
+      toDelete.forEach(e=>{ if(e.gcalId) gcalDelete(e); });
+    }
+  }
+  async function pushEventsToGoogleSequential(events){
+    for(const ev of events){
+      await gcalCreate(ev);
+      await new Promise(r=>setTimeout(r,120));
+    }
   }
 
   // ---- rendering ----
@@ -845,6 +896,7 @@
 
     if(editingEvent){
       const confirming = state.confirmDelete === 'event:'+editingEvent.id;
+      const isSeries = !!editingEvent.recurrenceGroupId;
       formHTML = `<form class="event-form" data-form="edit-event" data-id="${editingEvent.id}">
         <div class="row">
           <input class="emoji-in2" name="emoji" value="${esc(editingEvent.emoji)}" maxlength="4">
@@ -853,6 +905,10 @@
         <div class="row">
           <input class="time-in" type="time" name="start" value="${editingEvent.start}">
           <input class="time-in" type="time" name="end" value="${editingEvent.end}">
+        </div>
+        ${isSeries ? `<div class="row"><span style="font-size:11px;color:var(--text-faint);font-family:'JetBrains Mono',monospace;">🔁 ${esc(editingEvent.recurrenceLabel||'')}</span></div>` : ''}
+        <div class="row">
+          <textarea name="description" class="desc-textarea" placeholder="Description (optionnel)">${esc(editingEvent.description||'')}</textarea>
         </div>
         <div class="row">
           <select name="remind" class="remind-select">
@@ -864,8 +920,9 @@
             <option value="1440" ${editingEvent.remind===1440?'selected':''}>1 jour avant</option>
           </select>
         </div>
-        <div class="form-actions">
-          <button type="button" class="btn ${confirming?'':'btn-ghost'}" style="${confirming?'background:var(--danger);color:#2a0f0b;':''}" data-action="delete-event" data-id="${editingEvent.id}">${confirming?'Confirmer':'🗑 Supprimer'}</button>
+        <div class="form-actions" style="flex-wrap:wrap;">
+          <button type="button" class="btn ${confirming?'':'btn-ghost'}" style="${confirming?'background:var(--danger);color:#2a0f0b;':''}" data-action="delete-event" data-id="${editingEvent.id}">${confirming?'Confirmer':'🗑 Cet évènement'}</button>
+          ${isSeries ? `<button type="button" class="btn btn-ghost" style="color:var(--danger);" data-action="delete-event-series" data-id="${editingEvent.id}">🗑 Toute la série</button>` : ''}
           <button type="button" class="btn btn-ghost" data-action="cancel-edit-event">Annuler</button>
           <button type="submit" class="btn btn-primary">Enregistrer</button>
         </div>
@@ -881,6 +938,9 @@
           <input class="time-in" type="time" name="end" value="10:00">
         </div>
         <div class="row">
+          <textarea name="description" class="desc-textarea" placeholder="Description (optionnel)"></textarea>
+        </div>
+        <div class="row">
           <select name="remind" class="remind-select">
             <option value="0">Pas de rappel</option>
             <option value="15">15 min avant</option>
@@ -889,6 +949,18 @@
             <option value="120">2h avant</option>
             <option value="1440">1 jour avant</option>
           </select>
+        </div>
+        <div class="row">
+          <select name="recurrence" class="remind-select" data-action-onchange="toggle-recur-until">
+            <option value="none">Ne se répète pas</option>
+            <option value="daily">Tous les jours</option>
+            <option value="weekdays">Jours de semaine (Lun-Ven)</option>
+            <option value="weekly">Toutes les semaines</option>
+            <option value="monthly">Tous les mois</option>
+          </select>
+        </div>
+        <div class="row">
+          <input class="time-in" type="date" name="recurUntil" style="width:100%;" value="${addDays(state.planningDate,60)}">
         </div>
         <div class="form-actions">
           <button type="button" class="btn btn-ghost" data-action="cancel-add-event">Annuler</button>
@@ -912,7 +984,7 @@
       const top = (minutesFromMidnight(ev.start) - GRID_START_HOUR*60) * (ROW_PX/60);
       const height = Math.max(24, (minutesFromMidnight(ev.end) - minutesFromMidnight(ev.start)) * (ROW_PX/60));
       return `<div class="event-block" style="top:${top}px;height:${height}px" data-action="edit-event" data-id="${ev.id}">
-        <div class="event-title">${ev.emoji} ${esc(ev.title)}</div>
+        <div class="event-title">${ev.emoji} ${esc(ev.title)}${ev.recurrenceGroupId?' 🔁':''}</div>
         <div class="event-time">${ev.start} – ${ev.end}</div>
       </div>`;
     }).join('');
@@ -1090,8 +1162,13 @@
       case 'cancel-edit-event':
         state.editingId = null; state.confirmDelete = null; render(); break;
       case 'delete-event':
-        if(state.confirmDelete === 'event:'+id) deleteEvent(id);
+        if(state.confirmDelete === 'event:'+id) deleteEvent(id, false);
         else { state.confirmDelete = 'event:'+id; render(); }
+        break;
+      case 'delete-event-series':
+        if(confirm("Supprimer TOUTE la série (tous les jours générés par cette récurrence) ? Cette action est irréversible.")){
+          deleteEvent(id, true);
+        }
         break;
       case 'change-code':
         if(confirm("Changer de code va recharger la page et te redemander un nouveau code. Continuer ?")){
@@ -1128,9 +1205,9 @@
     } else if(type==='add-subtab'){
       addSubtab(form.dataset.parent, form.name.value);
     } else if(type==='add-event'){
-      addEvent(state.planningDate, form.start.value, form.end.value, form.title.value, form.emoji.value, form.remind.value);
+      addEvent(state.planningDate, form.start.value, form.end.value, form.title.value, form.emoji.value, form.remind.value, form.description.value, form.recurrence.value, form.recurUntil.value);
     } else if(type==='edit-event'){
-      updateEvent(form.dataset.id, form.start.value, form.end.value, form.title.value, form.emoji.value, form.remind.value);
+      updateEvent(form.dataset.id, form.start.value, form.end.value, form.title.value, form.emoji.value, form.remind.value, form.description.value);
     }
   });
 
