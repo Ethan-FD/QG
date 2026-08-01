@@ -271,17 +271,25 @@
       callback: (resp)=>{
         if(resp && resp.access_token){
           googleAccessToken = resp.access_token;
-          try{ localStorage.setItem('qg-google-connected','1'); }catch(e){}
+          const expiresAt = Date.now() + ((resp.expires_in||3500)*1000);
+          try{
+            localStorage.setItem('qg-google-connected','1');
+            localStorage.setItem('qg-google-token', JSON.stringify({token: resp.access_token, expiresAt}));
+          }catch(e){}
           pullGoogleEvents();
           render();
         }
       }
     });
+    // Reuse a still-valid saved token instead of forcing a reconnect on every reload.
     try{
-      if(localStorage.getItem('qg-google-connected')==='1'){
-        gTokenClient.requestAccessToken({prompt:''});
+      const saved = JSON.parse(localStorage.getItem('qg-google-token') || 'null');
+      if(saved && saved.token && saved.expiresAt > Date.now() + 60000){
+        googleAccessToken = saved.token;
+        pullGoogleEvents();
       }
     }catch(e){}
+    render();
   }
   window.addEventListener('load', ()=> setTimeout(initGoogleClient, 400));
 
@@ -1102,7 +1110,7 @@
         break;
       case 'disconnect-google':
         googleAccessToken = null;
-        try{ localStorage.removeItem('qg-google-connected'); }catch(e){}
+        try{ localStorage.removeItem('qg-google-connected'); localStorage.removeItem('qg-google-token'); }catch(e){}
         render();
         break;
     }
