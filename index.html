@@ -1271,11 +1271,15 @@
     }
   })();
 
+  function isFormOpen(){
+    return state.addingHabit || state.addingCategory || state.addingSubtab || state.addingEvent || !!state.editingId;
+  }
+
   // 3. Keep the "now" line fresh and check event reminders.
   checkReminders();
   setInterval(()=>{
     checkReminders();
-    if(state.view==='planning') render();
+    if(state.view==='planning' && !isFormOpen()) render();
   }, 30000);
 })();
 </script>
